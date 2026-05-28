@@ -2,15 +2,15 @@
 
 Senior AI Engineer. I build production AI systems and the infrastructure that keeps them honest.
 
-Currently shipping open-source dev tooling at [Tracine](https://tracine.dev). Safety, observability, and evaluation infrastructure for AI coding agents.
+Ten years at **GoDaddy**. The most recent two were on an agentic AI feature for **Airo Site Designer** with multi-agent tool routing across six agent layers, and I cut LLM inference cost 93% on an earlier retrieval pipeline. Concurrent contract at **McLean Forrester** built a CI-gated LLM evaluation framework on **Promptfoo** that caught a 39-point quality regression before it shipped.
 
-- **[guard](https://github.com/TracineHQ/guard).** Stdlib-only safety hooks for Claude Code. Defense-in-depth across seven validators with a queryable JSONL decision log.
+Also running [Tracine](https://tracine.dev), open-source tooling for AI coding agents.
+
+- **[guard](https://github.com/TracineHQ/guard).** Eight PreToolUse validators that deny with feedback, plus a per-hook circuit breaker and a JSONL decision log.
 - **[convo](https://github.com/TracineHQ/convo).** SQLite-backed analytics CLI for Claude Code session logs. Full-text search, tool-call analytics, atomic snapshot/restore.
 
-Ten years at GoDaddy on AI/LLM infrastructure. Recent contract at McLean Forrester on evaluation tooling.
+Python and TypeScript daily. Recent production has touched AWS, GCP, plus Terraform. AI focus has been multi-agent orchestration with RAG and LLM evaluation.
 
-Day-to-day stack runs Python and TypeScript on Anthropic SDK with AWS, GCP, Terraform. Focus areas are multi-agent orchestration plus LLM evaluation.
-
-Remote-only. Inbound welcome for senior or principal AI engineering roles.
+Open to senior or staff AI engineering roles, remote.
 
 [LinkedIn](https://linkedin.com/in/anthonyledesma) · [tracine.dev](https://tracine.dev)
