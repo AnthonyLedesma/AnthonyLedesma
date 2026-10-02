@@ -8,7 +8,7 @@ Also maintain [Tracine](https://tracine.dev), open-source tooling for AI coding 
 
 - **[guard](https://github.com/TracineHQ/guard).** Eight PreToolUse validators that deny with feedback, plus a per-hook circuit breaker and a JSONL decision log.
 - **[convo](https://github.com/TracineHQ/convo).** SQLite-backed analytics CLI for Claude Code session logs. Full-text search, tool-call analytics, atomic snapshot/restore.
-- **[eval-kit](https://github.com/TracineHQ/eval-kit).** Did the eval get better, or is that noise? A Claude Code skill and CLI that sizes the runs, gates CI on the verdict, and says "can't tell yet" when the data can't support a call. Alpha.
+- **[eval-kit](https://github.com/TracineHQ/eval-kit).** Did the eval get better, or is that noise? A Claude Code skill and CLI that sizes the runs, gates CI on the verdict, and says "can't tell yet" when the data can't support a call. Beta.
 
 Python and TypeScript daily. Recent production has touched AWS, GCP, plus Terraform. AI focus has been multi-agent orchestration with RAG and LLM evaluation.
 
