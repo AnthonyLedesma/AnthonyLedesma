@@ -12,4 +12,4 @@ Also maintain [Tracine](https://tracine.dev), open-source tooling for AI coding 
 
 Python and TypeScript daily. Recent production has touched AWS, GCP, plus Terraform. AI focus has been multi-agent orchestration with RAG and LLM evaluation.
 
-[LinkedIn](https://linkedin.com/in/anthonyledesma) · [tracine.dev](https://tracine.dev)
+[anthonyledesma.com](https://anthonyledesma.com) · [LinkedIn](https://linkedin.com/in/anthonyledesma) · [tracine.dev](https://tracine.dev)
