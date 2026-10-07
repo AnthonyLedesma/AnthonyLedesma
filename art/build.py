@@ -121,7 +121,7 @@ def _legend(t: Theme, narrow: bool) -> tuple[list[str], float]:
     k = 12 if narrow else 14
     def sw(x: float, y: float, fill: str) -> str:
         return f'<rect x="{x:g}" y="{y - k + 1:g}" width="{k}" height="{k}" fill="{fill}"/>'
-    a_name, b_name = f"@{ACCOUNTS[0]}", "work"
+    a_name, b_name = "personal", "work"  # handles live in the caption
     if narrow:
         tx = m + k + 10
         out = [
