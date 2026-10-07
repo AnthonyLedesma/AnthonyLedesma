@@ -384,11 +384,11 @@ TAG_LINES = ["Agent systems,", "and the evals that", "keep them honest."]
 assert " ".join(TAG_LINES) == TAG
 
 
-NDW = 400  # phone art's intrinsic display width, so it tops out at 400px instead of stretching to the column
+NDW = 480  # phone art shows at its native width, so on wide phones it stays 480px instead of stretching to the column
 
 
 def nframe(t: Theme, H: float, a: Anim, label: str, piece: str, body: str, strip: bool = True, extra_defs: str = "") -> str:
-    """Narrow frame on the 480 grid (viewBox 0 0 480 H), displayed at width 400 with the height scaled to match."""
+    """Narrow frame on the 480 grid (viewBox 0 0 480 H), displayed at its native 480 width."""
     svg = frame(t, int(H), a, label, piece, body, strip, extra_defs, w=NW, m=NM, sp=NSP, ts=NS)
     root = f'viewBox="0 0 {NW} {int(H)}" width="{NW}" height="{int(H)}"'
     assert svg.count(root) == 1
