@@ -16,7 +16,7 @@ from kit import (
 )
 
 HERE = Path(__file__).resolve().parent
-ACCOUNTS = ["AnthonyLedesma", "AnthonyLedesmaTR"]  # base layer first
+ACCOUNTS = ["AnthonyLedesma", "AnthonyLedesmaTR", "anthonyl-mf"]  # personal first; the rest stack as one work layer
 
 
 def _weeks(cal: dict) -> list[tuple[dt.date, int, list[int]]]:
@@ -95,14 +95,14 @@ def _replay_phrase() -> str:
 
 
 CONTRIB_ALT = (
-    "Weekly GitHub contributions for the last 12 months across two accounts: AnthonyLedesma, and AnthonyLedesmaTR "
-    "(work, private, counts only). A pixel runner crosses the bars "
+    "Weekly GitHub contributions for the last 12 months: personal account AnthonyLedesma, plus work accounts "
+    "AnthonyLedesmaTR and anthonyl-mf (private repos, counts only). A pixel runner crosses the bars "
     + ("every 20 seconds" if REPLAYS is None else "once" if REPLAYS <= 1 else f"{REPLAYS} times, 20 seconds apart")
     + ". Updated daily."
 )
-CONTRIB_NOTE = "GitHub contribution calendars, two accounts · updated daily"
-LEGEND_TR = "work, private, counts only"
-# second layer (AnthonyLedesmaTR): a dimmer amber with a 45-degree hatch, so it differs from the solid layer in
+CONTRIB_NOTE = "calendars of @AnthonyLedesma, @AnthonyLedesmaTR, @anthonyl-mf · updated daily"
+LEGEND_WORK = "private repos, counts only"
+# second layer (the work accounts): a dimmer amber with a 45-degree hatch, so it differs from the solid layer in
 # pattern as well as tone. Dark: lo amber stripes on deep amber. Light: the runner ramp's amber on a pale amber wash.
 HATCH = {True: (PH_DEEP, PH_LO), False: ("#f3dfb8", RAMP_LIGHT[2])}
 
@@ -116,30 +116,30 @@ def _hatch(t: Theme) -> str:
 
 
 def _legend(t: Theme, narrow: bool) -> tuple[list[str], float]:
-    """Swatch + handle per account. Wide: one row (y 140). Narrow: stacked, the TR note on its own line under its handle."""
+    """Swatch per layer. Wide: one row (y 140). Narrow: stacked, the work note on its own line under its label."""
     m, sz = (NM, NS) if narrow else (M, S)
     k = 12 if narrow else 14
     def sw(x: float, y: float, fill: str) -> str:
         return f'<rect x="{x:g}" y="{y - k + 1:g}" width="{k}" height="{k}" fill="{fill}"/>'
-    a_name, b_name = (f"@{ACCOUNTS[0]}", f"@{ACCOUNTS[1]}")
+    a_name, b_name = f"@{ACCOUNTS[0]}", "work"
     if narrow:
         tx = m + k + 10
         out = [
             sw(m, 166, t.label) + text(tx, 166, [(t.text, a_name)], sz),
             sw(m, 194, "url(#hatch)") + text(tx, 194, [(t.text, b_name)], sz),
-            text(tx, 220, [(t.muted, LEGEND_TR)], sz),
+            text(tx, 220, [(t.muted, LEGEND_WORK)], sz),
         ]
         return out, 220
     x2 = m + k + 10 + len(a_name) * cw(sz) + 36
     out = [
         sw(m, 140, t.label) + text(m + k + 10, 140, [(t.text, a_name)], sz),
-        sw(x2, 140, "url(#hatch)") + text(x2 + k + 10, 140, [(t.text, b_name), (t.muted, " · " + LEGEND_TR)], sz),
+        sw(x2, 140, "url(#hatch)") + text(x2 + k + 10, 140, [(t.text, b_name), (t.muted, " · " + LEGEND_WORK)], sz),
     ]
     return out, 140
 
 
 def contrib_runner(t: Theme, narrow: bool = False) -> str:
-    """Weekly totals for both accounts as stacked bars: AnthonyLedesma solid phosphor at the base, AnthonyLedesmaTR
+    """Weekly totals as stacked bars: AnthonyLedesma solid phosphor at the base, the work accounts summed and
     hatched on top, on one linear scale whose top is the busiest combined week. The runner enters from off the left
     edge, crosses (0.3 to 2.6s) bumping each week with a +1 over the busiest combined weeks, then stands at the right
     edge. On replay he runs off the right edge and back in from the left, so the loop seam happens while he is hidden
@@ -149,7 +149,7 @@ def contrib_runner(t: Theme, narrow: bool = False) -> str:
     """
     passes = 1 if REPLAYS is None else max(1, REPLAYS)
     a = Anim(REPLAY * passes, "infinite" if REPLAYS is None else "")
-    counts = [c for _, _, c in WEEKS]
+    counts = [(c[0], sum(c[1:])) for _, _, c in WEEKS]
     totals = [sum(c) for c in counts]
     n = len(totals)
     partial = WEEKS[-1][1] < 7
@@ -167,7 +167,10 @@ def contrib_runner(t: Theme, narrow: bool = False) -> str:
     t_s, t_e = 0.3, 2.6
     v = (xe - xs) / (t_e - t_s)
     t_x = REPLAY - 0.01 - (xo - xe) / v  # exit at run speed, gone just before the next pass
-    busy = sorted(range(n), key=lambda i: -totals[i])[:6]
+    busy: list[int] = []  # the six busiest combined weeks, at least 4 weeks apart so their +1s never overlap
+    for i in sorted(range(n), key=lambda i: -totals[i]):
+        if len(busy) < 6 and all(abs(i - j) >= 4 for j in busy):
+            busy.append(i)
     offs = [p * REPLAY for p in range(passes)]
     exits = [REPLAYS is None or p < passes - 1 for p in range(passes)]
 
@@ -301,8 +304,9 @@ def contrib_runner(t: Theme, narrow: bool = False) -> str:
     rglow = ' filter="url(#gline)"' if t.dark else ""
     body.append(f'<g transform="translate({xe:.1f} {ybase - sh + 1:.1f})"><g class="run"{rglow}>{frames}</g></g>')
     label = (
-        "Weekly GitHub contributions for the last 12 months across two accounts: AnthonyLedesma, as solid phosphor bars, "
-        "and AnthonyLedesmaTR (work, private, counts only), as hatched bars stacked on top, on one linear scale. "
+        "Weekly GitHub contributions for the last 12 months: personal account AnthonyLedesma as solid phosphor bars, "
+        "and work accounts AnthonyLedesmaTR and anthonyl-mf (private repos, counts only) summed as hatched bars "
+        "stacked on top, on one linear scale. "
         "A pixel runner crosses, bumping each week, with a +1 over the busiest combined weeks, then stands at the right "
         f"edge{_replay_phrase()}. Updated daily."
     )

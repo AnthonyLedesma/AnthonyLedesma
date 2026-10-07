@@ -1,8 +1,8 @@
 """Fetch the last year of GitHub contributions for both accounts behind the profile art.
 
 Stdlib only. Needs GITHUB_TOKEN in the environment. Writes art/contrib.json as
-{"AnthonyLedesma": <contributionCalendar>, "AnthonyLedesmaTR": <contributionCalendar>}.
-Both calendars are public; AnthonyLedesmaTR shows its private (work) contributions as counts only.
+{login: <contributionCalendar>} for each login. All calendars are public; the work accounts
+(AnthonyLedesmaTR, anthonyl-mf) show their private contributions as counts only.
 """
 
 import json
@@ -10,7 +10,7 @@ import os
 import urllib.request
 from pathlib import Path
 
-LOGINS = ["AnthonyLedesma", "AnthonyLedesmaTR"]
+LOGINS = ["AnthonyLedesma", "AnthonyLedesmaTR", "anthonyl-mf"]
 OUT = Path(__file__).resolve().parent / "contrib.json"
 QUERY = """
 query($login: String!) {
@@ -53,7 +53,7 @@ def fetch(login: str) -> dict:
 
 def main() -> None:
     cals = {login: fetch(login) for login in LOGINS}
-    # A token that can't see the work account's private counts returns zero, which
+    # A token that can't see a work account's private counts returns zero, which
     # would draw an empty layer under a legend that promises one.
     if any(c["totalContributions"] == 0 for c in cals.values()):
         raise SystemExit("an account returned zero contributions")
