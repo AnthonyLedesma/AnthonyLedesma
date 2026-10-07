@@ -346,7 +346,7 @@ def frame(
         over = f'<rect x="{sp}" width="{w - 2 * sp}" height="{H}" fill="url(#dot)"/>'
     head = ""
     if strip:
-        brand = "TRACINE TERMINAL" if t.dark else "TRACINE · LPT1"
+        brand = "TRACINE TERMINAL" if t.dark else "TRACINE PRINTOUT"
         tty = ("TTY1 · " if t.dark else "LPT1 · ") + piece
         # caps advance is 0.6em + 1.9 tracking. Drop the device prefix if it would crowd the brand on the longest
         # piece label (CONTRIB), so every piece in a theme and grid makes the same choice.

@@ -10,39 +10,44 @@ import re
 from pathlib import Path
 
 from kit import (
-    CPS, DONE, LH, M, MD, NS, PH, PH_HI, PH_HOT, PH_INK, PROMPT, RAMP_DARK, RAMP_LIGHT, S, THEMES, CONTENT_R, L,
+    CPS, M, MD, NS, PH_DEEP, PH_HI, PH_HOT, PH_LO, PROMPT, RAMP_DARK, RAMP_LIGHT, S, THEMES, CONTENT_R, L,
     NCONTENT_R, NM, NSP, NW, W,
-    Anim, Theme, badge, caps, cursor, cw, display, frame, glow, mark, text, wrap, wrap_spans,
+    Anim, Theme, caps, cursor, cw, display, frame, glow, text, wrap, wrap_spans,
 )
 
 HERE = Path(__file__).resolve().parent
-WEEKS = json.loads((HERE / "contrib.json").read_text())["data"]["user"]["contributionsCollection"]["contributionCalendar"]["weeks"]
+ACCOUNTS = ["AnthonyLedesma", "AnthonyLedesmaTR"]  # base layer first
+
+
+def _weeks(cal: dict) -> list[tuple[dt.date, int, list[int]]]:
+    """Both calendars aligned by date into Sunday-start weeks: (sunday, days seen, [count per account])."""
+    by: dict[dt.date, tuple[set, list[int]]] = {}
+    for k, login in enumerate(ACCOUNTS):
+        for w in cal[login]["weeks"]:
+            for d in w["contributionDays"]:
+                day = dt.date.fromisoformat(d["date"])
+                days, row = by.setdefault(day - dt.timedelta(days=(day.weekday() + 1) % 7), (set(), [0] * len(ACCOUNTS)))
+                days.add(day)
+                row[k] += d["contributionCount"]
+    return [(sun, len(by[sun][0]), by[sun][1]) for sun in sorted(by)]
+
+
+WEEKS = _weeks(json.loads((HERE / "contrib.json").read_text()))
 TAG = "Agent systems, and the evals that keep them honest."
 ROLE = "Staff AI Engineer"
-HEAD_LINKS = "anthonyledesma.com · tracine.dev"
-NCOLS_S, NCOLS_MD, NCOLS_L = (int((NCONTENT_R - NM) // cw(z)) for z in (NS, MD, L))  # 38, 34, 24 chars on the narrow grid
-# guard's deny output for rm -rf /: the rule id plus the reason sentence, abbreviated (the "Blocked: ..." wrapper and
-# the override hint are left out). Source: guard registry.py bash.always_deny, bash_command_validator._format_deny_reason.
-DENY_TAIL = " [permission_mode=default] denied: bash.always_deny."
-DENY_WHY = "Recursive root/home deletion is never allowed."
-INSTALL = ["/plugin marketplace add TracineHQ/plugins", "/plugin install guard@tracine", "/plugin install convo@tracine", "/plugin install eval-kit@tracine"]
+NCOLS_S, NCOLS_L = (int((NCONTENT_R - NM) // cw(z)) for z in (NS, L))  # 38, 24 chars on the narrow grid
 
 # contrib runner replay. README images can't detect scrolling, so a replay is how visitors actually get to see the run.
 REPLAY = 20.0  # seconds from the start of one pass to the next
 REPLAYS = None  # None = every 20s forever; an int caps the passes
 
 # masthead rows
-Y_PROMPT, Y_NAME, Y_SUB, Y_TAG, Y_RULE, Y_FOOT, H_HEAD = 108, 192, 236, 284, 318, 356, 388
+Y_PROMPT, Y_NAME, Y_TAG, Y_RULE, Y_FOOT, H_HEAD = 108, 192, 240, 274, 312, 344
 NPAD_B = 24  # narrow: last baseline to frame edge
 
 
 def hrule(t: Theme, y: float, m: int = M, r: int = CONTENT_R) -> str:
     return f'<rect x="{m}" y="{y}" width="{r - m}" height="1" fill="{t.edge}"/>'
-
-
-def hot(t: Theme) -> str:
-    """Rev-video flash color: hot white on glass, phosphor-hi on paper (hot white would vanish into it)."""
-    return PH_HOT if t.dark else PH_HI
 
 
 # ------------------------------------------------------------------ 1. header
@@ -52,12 +57,10 @@ def header(t: Theme) -> str:
     body = (
         text(M, Y_PROMPT, [(t.label, PROMPT), (t.accent, "whoami")], MD, extra=glow(t))
         + display(t, M - 3, Y_NAME, "Anthony Ledesma")
-        + caps(M, Y_SUB, ROLE, t.text, MD)
         + text(M, Y_TAG, [(t.accent, TAG)], L, a.type(0.3, TAG), extra=glow(t))
         + hrule(t, Y_RULE)
         + text(M, Y_FOOT, [(t.label, PROMPT)], MD)
         + cursor(t, M + len(PROMPT) * cw(MD), Y_FOOT, MD, a.show(1.15))
-        + text(CONTENT_R, Y_FOOT, [(t.muted, HEAD_LINKS)], S, extra=' text-anchor="end"')
     )
     return frame(t, H_HEAD, a, f"Anthony Ledesma, {ROLE}. {TAG}", "WHOAMI", body)
 
@@ -92,29 +95,73 @@ def _replay_phrase() -> str:
 
 
 CONTRIB_ALT = (
-    "Anthony Ledesma's GitHub contributions per week for the last 12 months, with a pixel runner that crosses the bars "
+    "Weekly GitHub contributions for the last 12 months across two accounts: AnthonyLedesma, and AnthonyLedesmaTR "
+    "(work, private, counts only). A pixel runner crosses the bars "
     + ("every 20 seconds" if REPLAYS is None else "once" if REPLAYS <= 1 else f"{REPLAYS} times, 20 seconds apart")
     + ". Updated daily."
 )
+CONTRIB_NOTE = "GitHub contribution calendars, two accounts · updated daily"
+LEGEND_TR = "work, private, counts only"
+# second layer (AnthonyLedesmaTR): a dimmer amber with a 45-degree hatch, so it differs from the solid layer in
+# pattern as well as tone. Dark: lo amber stripes on deep amber. Light: the runner ramp's amber on a pale amber wash.
+HATCH = {True: (PH_DEEP, PH_LO), False: ("#f3dfb8", RAMP_LIGHT[2])}
+
+
+def _hatch(t: Theme) -> str:
+    base, ink = HATCH[t.dark]
+    return (
+        '<pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">'
+        f'<rect width="6" height="6" fill="{base}"/><rect width="3" height="6" fill="{ink}"/></pattern>'
+    )
+
+
+def _legend(t: Theme, narrow: bool) -> tuple[list[str], float]:
+    """Swatch + handle per account. Wide: one row (y 140). Narrow: stacked, the TR note on its own line under its handle."""
+    m, sz = (NM, NS) if narrow else (M, S)
+    k = 12 if narrow else 14
+    def sw(x: float, y: float, fill: str) -> str:
+        return f'<rect x="{x:g}" y="{y - k + 1:g}" width="{k}" height="{k}" fill="{fill}"/>'
+    a_name, b_name = (f"@{ACCOUNTS[0]}", f"@{ACCOUNTS[1]}")
+    if narrow:
+        tx = m + k + 10
+        out = [
+            sw(m, 166, t.label) + text(tx, 166, [(t.text, a_name)], sz),
+            sw(m, 194, "url(#hatch)") + text(tx, 194, [(t.text, b_name)], sz),
+            text(tx, 220, [(t.muted, LEGEND_TR)], sz),
+        ]
+        return out, 220
+    x2 = m + k + 10 + len(a_name) * cw(sz) + 36
+    out = [
+        sw(m, 140, t.label) + text(m + k + 10, 140, [(t.text, a_name)], sz),
+        sw(x2, 140, "url(#hatch)") + text(x2 + k + 10, 140, [(t.text, b_name), (t.muted, " · " + LEGEND_TR)], sz),
+    ]
+    return out, 140
 
 
 def contrib_runner(t: Theme, narrow: bool = False) -> str:
-    """Weekly totals as phosphor bars. The runner enters from off the left edge, crosses (0.3 to 2.6s) bumping each week
-    with a +1 over the busiest, then stands at the right edge. On replay he runs off the right edge and back in from the
-    left, so the loop seam happens while he is hidden by the panel clip. Bars rise only once (they are static).
+    """Weekly totals for both accounts as stacked bars: AnthonyLedesma solid phosphor at the base, AnthonyLedesmaTR
+    hatched on top, on one linear scale whose top is the busiest combined week. The runner enters from off the left
+    edge, crosses (0.3 to 2.6s) bumping each week with a +1 over the busiest combined weeks, then stands at the right
+    edge. On replay he runs off the right edge and back in from the left, so the loop seam happens while he is hidden
+    by the panel clip. Bars rise only once (they are static).
 
-    narrow: same bars and runner on the 480 grid, taller bars, a month label about every quarter, captions stacked.
+    narrow: same bars and runner on the 480 grid, a month label about every quarter, legend and caption stacked.
     """
     passes = 1 if REPLAYS is None else max(1, REPLAYS)
     a = Anim(REPLAY * passes, "infinite" if REPLAYS is None else "")
-    totals = [sum(d["contributionCount"] for d in w["contributionDays"]) for w in WEEKS]
+    counts = [c for _, _, c in WEEKS]
+    totals = [sum(c) for c in counts]
     n = len(totals)
-    partial = len(WEEKS[-1]["contributionDays"]) < 7
+    partial = WEEKS[-1][1] < 7
     m, cr, fw, sz = (NM, NCONTENT_R, NW, NS) if narrow else (M, CONTENT_R, W, S)
-    x0, x1, ytop, ybase = (m, cr - 36, 172, 360) if narrow else (M, CONTENT_R - 56, 128, 300)
+    legend, y_leg = _legend(t, narrow)
+    ytop = y_leg + 42
+    ybase = ytop + (178 if narrow else 172)
+    x0, x1 = (m, cr - 36) if narrow else (M, CONTENT_R - 56)
     peak = max(max(totals), 1)
     slot = (x1 - x0) / n
-    bw = slot * 0.62
+    bw = slot * (0.72 if narrow else 0.62)
+    gap = 2  # paper/glass between the two layers, taken out of the top layer so the stack height stays on scale
     sw, sh = 30, 48  # sprite 20x32 at 1.5
     xs, xe, xo = -sw - 2, cr - sw, fw + 2  # start and exit are both behind the panel clip
     t_s, t_e = 0.3, 2.6
@@ -137,18 +184,32 @@ def contrib_runner(t: Theme, narrow: bool = False) -> str:
     body = [
         text(m, 100, [(t.accent, "contributions per week")], MD, weight=700, extra=glow(t)),
         text(m, 130, [(t.muted, sub)], NS) if narrow else text(CONTENT_R, 100, [(t.muted, sub)], S, extra=' text-anchor="end"'),
+        *legend,
         f'<rect x="{m}" y="{ybase}" width="{cr - m}" height="2" fill="{t.edge}"/>',
     ]
     bars, pluses = [], []
-    for i, tot in enumerate(totals):
+    span = ybase - ytop
+    for i, (own, work) in enumerate(counts):
+        if not own + work:
+            continue
         xc, tc = X(i), tc_of(i)
-        h = max(tot / peak * (ybase - ytop), 2)
+        h_all = max((own + work) / peak * span, 2)
+        h_own = max(own / peak * span, 2) if own else 0
+        segs, y_top = [], ybase - h_own
+        if own:
+            segs.append(f'<rect x="{xc - bw / 2:.1f}" y="{ybase - h_own:.1f}" width="{bw:.1f}" height="{h_own:.1f}" fill="{t.label}"/>')
+        if work:
+            top = ybase - max(h_all, h_own + gap + 2) if own else ybase - h_all
+            bot = ybase - h_own - (gap if own else 0)
+            segs.append(f'<rect x="{xc - bw / 2:.1f}" y="{top:.1f}" width="{bw:.1f}" height="{bot - top:.1f}" fill="url(#hatch)"/>')
+            y_top = top
+        h = ybase - y_top
         op = ' opacity=".7"' if partial and i == n - 1 else ""
         c = a.cls()
         lift = 8 if i in busy else 4
         kf = "".join(f"{a.p(o + tc - .05)}{{transform:none}}{a.p(o + tc)}{{transform:translateY(-{lift}px)}}{a.p(o + tc + .15)}{{transform:none}}" for o in offs)
         a.raw(f".{c}{{{a.run(c)}}}@keyframes {c}{{0%{{transform:none}}{kf}100%{{transform:none}}}}")
-        bars.append(f'<rect class="{c}" x="{xc - bw / 2:.1f}" y="{ybase - h:.1f}" width="{bw:.1f}" height="{h:.1f}" fill="{t.label}"{op}/>')
+        bars.append(f'<g class="{c}"{op}>{"".join(segs)}</g>')
         if i in busy:
             pc = a.cls()
             kf = "".join(
@@ -160,25 +221,23 @@ def contrib_runner(t: Theme, narrow: bool = False) -> str:
             pluses.append(text(xc, ybase - h - 12, [(PH_HI if t.dark else t.accent, "+1")], sz, pc, 700, ' text-anchor="middle"' + glow(t)))
     body.append(f"<g{glow(t)}>{''.join(bars)}</g>")
     body += pluses
-    last_m, last_x, gap = None, -999, (56 if narrow else 70)
-    for i, w in enumerate(WEEKS):
-        d = dt.date.fromisoformat(w["contributionDays"][0]["date"])
-        if d.month != last_m:
-            last_m = d.month
+    last_m, last_x, mgap = None, -999, (56 if narrow else 70)
+    for i, (sun, _, _) in enumerate(WEEKS):
+        if sun.month != last_m:
+            last_m = sun.month
             x = X(i) - slot / 2
-            if x - last_x > gap and x < x1 - 30:
-                body.append(text(x, ybase + (30 if narrow else 28), [(t.muted, d.strftime("%b"))], sz))
+            if x - last_x > mgap and x < x1 - 30:
+                body.append(text(x, ybase + (30 if narrow else 28), [(t.muted, sun.strftime("%b"))], sz))
                 last_x = x + 30
     body.append(hrule(t, ybase + 48, m, cr))
-    note = "GitHub contribution calendar, weekly totals · updated daily"
     if narrow:
         y = ybase + 80
-        for line in wrap(note, NCOLS_S, balance=True):
+        for line in wrap(CONTRIB_NOTE, NCOLS_S, balance=True):
             body.append(text(m, y, [(t.muted, line)], NS))
             y += 26
         H = y - 26 + NPAD_B
     else:
-        body.append(text(CONTENT_R, ybase + 78, [(t.muted, note)], S, extra=' text-anchor="end"'))
+        body.append(text(CONTENT_R, ybase + 78, [(t.muted, CONTRIB_NOTE)], S, extra=' text-anchor="end"'))
         H = ybase + 100
 
     # hops: busy weeks closer than 0.08s share one hop, and no hop overlaps its neighbours or the run's ends
@@ -242,78 +301,17 @@ def contrib_runner(t: Theme, narrow: bool = False) -> str:
     rglow = ' filter="url(#gline)"' if t.dark else ""
     body.append(f'<g transform="translate({xe:.1f} {ybase - sh + 1:.1f})"><g class="run"{rglow}>{frames}</g></g>')
     label = (
-        "Anthony Ledesma's GitHub contributions per week for the last 12 months, as phosphor bars. A pixel runner, drawn in phosphor, "
-        f"crosses, bumping each week, with a +1 over the busiest weeks, then stands at the right edge{_replay_phrase()}. Updated daily."
+        "Weekly GitHub contributions for the last 12 months across two accounts: AnthonyLedesma, as solid phosphor bars, "
+        "and AnthonyLedesmaTR (work, private, counts only), as hatched bars stacked on top, on one linear scale. "
+        "A pixel runner crosses, bumping each week, with a +1 over the busiest combined weeks, then stands at the right "
+        f"edge{_replay_phrase()}. Updated daily."
     )
     if narrow:
-        return frame(t, int(H), a, label, "CONTRIB", "".join(body), w=NW, m=NM, sp=NSP, ts=NS)
-    return frame(t, int(H), a, label, "CONTRIB", "".join(body))
+        return nframe(t, H, a, label, "CONTRIB", "".join(body), extra_defs=_hatch(t))
+    return frame(t, int(H), a, label, "CONTRIB", "".join(body), extra_defs=_hatch(t))
 
 
-# ------------------------------------------------------------------ 3. showcase
-PRODUCTS = [
-    ("GUARD", "available", "Stdlib-only safety hooks for Claude Code."),
-    ("CONVO", "available", "SQLite-backed analytics CLI for Claude Code sessions."),
-    ("EVAL-KIT", "beta", "Did the eval get better, or is that noise?"),
-    ("TRIAGE", "soon", "Planned. Not built yet."),
-]
-SHOW_LABEL = (
-    "Tracine products. guard and convo are available, eval-kit is in beta, triage is coming soon. Install with /plugin marketplace add TracineHQ/plugins, "
-    "then /plugin install guard@tracine, convo@tracine, eval-kit@tracine. Claude Code tries rm -rf / and guard denies it: bash.always_deny, recursive root/home deletion is never allowed."
-)
-REM_INSTALL = "rem install, inside Claude Code"
-REM_LOG = "rem every decision lands in ~/.claude/guard-decisions.jsonl"
-TIERS_NOTE = "AVAILABLE: released · BETA: may change before 1.0"
-T_REM = min(0.35 + (len(DENY_TAIL) + len(DENY_WHY)) / CPS + 0.02, DONE - 0.01)  # rem lines pop as the deny finishes
-
-
-def showcase(t: Theme) -> str:
-    """dir listing and install block static. The only motion: the guard deny line types (0.35 to ~2s)."""
-    a = Anim()
-    c = cw(MD)
-    y = 104
-    body = [text(M, y, [(t.label, PROMPT), (t.accent, "dir")], MD, extra=glow(t))]
-    y += 46
-    for name, tier, desc in PRODUCTS:
-        body.append(
-            text(M, y, [(t.display if t.dark else t.text, f"{name:<10}"), (t.label, " <DIR>")], MD, weight=600, extra=glow(t))
-            + badge(M + 18 * c, y, tier, t)
-            + text(M + 32 * c, y, [(t.muted if tier == "soon" else t.text, desc)], MD)
-        )
-        y += 38
-    y += 14
-    body.append(text(M, y, [(t.label, PROMPT + REM_INSTALL)], MD))
-    for cmd in INSTALL:
-        y += LH
-        body.append(text(M + 2 * c, y, [(t.accent, cmd)], MD, extra=glow(t)))
-    y += LH + 14
-    body.append(text(M, y, [(t.label, PROMPT), (t.accent, "claude")], MD, extra=glow(t)))
-    y += LH
-    body.append(f'<circle cx="{M + 6}" cy="{y - 6}" r="5.5" fill="{t.text}"/>' + text(M + 2 * c, y, [(t.text, "Bash"), (t.muted, "(rm -rf /)")], MD))
-    y += LH
-    dx, word = M + 4 * c, "guard"
-    rv = a.flash(0.3, "fill", PH, hot(t))
-    body.append(
-        f'<g class="{a.show(0.3)}"><path d="M{M + 2 * c + 3:g} {y - 20}v13h10" fill="none" stroke="{t.muted}" stroke-width="1.6"/>'
-        f'<rect class="{rv}" x="{dx - 5:g}" y="{y - 19}" width="{len(word) * c + 10:g}" height="26" fill="{PH}"/>'
-        + text(dx, y, [(PH_INK, word)], MD, weight=700)
-        + text(dx + len(word) * c, y, [(t.accent, DENY_TAIL)], MD, a.type(0.35, DENY_TAIL), extra=glow(t))
-        + text(dx, y + LH, [(t.accent, DENY_WHY)], MD, a.type(0.35 + len(DENY_TAIL) / CPS, DENY_WHY), extra=glow(t))
-        + "</g>"
-    )
-    y += 2 * LH
-    body.append(text(M, y, [(t.label, PROMPT + REM_LOG)], MD, a.show(T_REM)))
-    y += LH
-    body.append(text(M, y, [(t.label, PROMPT)], MD, a.show(T_REM)) + cursor(t, M + len(PROMPT) * c, y, MD, a.show(T_REM)))
-    y += 26
-    body.append(hrule(t, y))
-    y += 30
-    body.append(text(M, y, [(t.muted, TIERS_NOTE)], S))
-    body.append(text(CONTENT_R, y, [(t.muted, "tracine.dev")], S, extra=' text-anchor="end"'))
-    return frame(t, int(y + 26), a, SHOW_LABEL, "DIR", "".join(body))
-
-
-# ------------------------------------------------------------------ 4. evals
+# ------------------------------------------------------------------ 3. evals
 ROWS = [  # eval-kit README, verbatim
     ("4 runs per arm", 2.7, -0.8, 6.2, "can't tell yet: need 16 per arm"),
     ("8 runs per arm", 3.8, 2.2, 5.3, "improved"),
@@ -378,36 +376,23 @@ def evals(t: Theme) -> str:
     return frame(t, int(yf + 26), a, EVAL_LABEL, "EVALS", "".join(body))
 
 
-# ------------------------------------------------------------------ 5. footer
-FOOT_LEAD = "EOF · ANTHONY LEDESMA · "
-FOOT_LINKS = "tracine.dev · github.com/TracineHQ"
-FOOT_LABEL = "EOF, Anthony Ledesma, anthonyledesma.com, tracine.dev, github.com/TracineHQ"
-
-
-def footer(t: Theme) -> str:
-    a = Anim()
-    y = 52
-    body = (
-        mark(M, 25, 0.66, t.accent, filt=glow(t, "line"))
-        + text(M + 54, y, [(t.label, FOOT_LEAD), (t.accent, "anthonyledesma.com")], MD, weight=600, extra=glow(t))
-        + cursor(t, M + 54 + (len(FOOT_LEAD) + 18) * cw(MD) + 8, y, MD)
-        + text(CONTENT_R, y, [(t.muted, FOOT_LINKS)], S, extra=' text-anchor="end"')
-    )
-    return frame(t, 88, a, FOOT_LABEL, "", body, strip=False)
-
-
 # ------------------------------------------------------------------ narrow (phone) layouts
 # Same copy, frame, tokens and timing on the 480 grid. Only line breaks and layout change (a " · " that lands on a
-# break is dropped, and the phone showcase leaves out the product one-liners the README bullets right above repeat).
+# break is dropped).
 NC = NCONTENT_R
-NCS = cw(NS)
 TAG_LINES = ["Agent systems,", "and the evals that", "keep them honest."]
 assert " ".join(TAG_LINES) == TAG
-GREENBAR = 78  # first greenbar band baseline (STRIP 56 + 22); bands repeat every 64, rows every 32
 
 
-def nframe(t: Theme, H: float, a: Anim, label: str, piece: str, body: str, strip: bool = True) -> str:
-    return frame(t, int(H), a, label, piece, body, strip, w=NW, m=NM, sp=NSP, ts=NS)
+NDW = 400  # phone art's intrinsic display width, so it tops out at 400px instead of stretching to the column
+
+
+def nframe(t: Theme, H: float, a: Anim, label: str, piece: str, body: str, strip: bool = True, extra_defs: str = "") -> str:
+    """Narrow frame on the 480 grid (viewBox 0 0 480 H), displayed at width 400 with the height scaled to match."""
+    svg = frame(t, int(H), a, label, piece, body, strip, extra_defs, w=NW, m=NM, sp=NSP, ts=NS)
+    root = f'viewBox="0 0 {NW} {int(H)}" width="{NW}" height="{int(H)}"'
+    assert svg.count(root) == 1
+    return svg.replace(root, f'viewBox="0 0 {NW} {int(H)}" width="{NDW}" height="{round(int(H) * NDW / NW)}"')
 
 
 def header_m(t: Theme) -> str:
@@ -415,8 +400,7 @@ def header_m(t: Theme) -> str:
     a = Anim()
     first, last = "Anthony Ledesma".split(" ")
     body = [text(NM, 100, [(t.label, PROMPT), (t.accent, "whoami")], MD, extra=glow(t)), display(t, NM - 3, 172, first), display(t, NM - 3, 244, last)]
-    body.append(caps(NM, 286, ROLE, t.text, MD))
-    y, start = 330, 0.3
+    y, start = 290, 0.3
     for line in TAG_LINES:
         body.append(text(NM, y, [(t.accent, line)], L, a.type(start, line), extra=glow(t)))
         start += (len(line) + 1) / CPS
@@ -425,73 +409,7 @@ def header_m(t: Theme) -> str:
     body.append(hrule(t, y, NM, NC))
     y += 38
     body.append(text(NM, y, [(t.label, PROMPT)], MD) + cursor(t, NM + len(PROMPT) * cw(MD), y, MD, a.show(1.15)))
-    y += 28
-    body.append(text(NM, y, [(t.muted, HEAD_LINKS)], NS))
     return nframe(t, y + NPAD_B, a, f"Anthony Ledesma, {ROLE}. {TAG}", "WHOAMI", "".join(body))
-
-
-def showcase_m(t: Theme) -> str:
-    """dir listing (name, <DIR>, tier pill) at MD, then the session transcript at NS on 32-unit rows that sit on the
-    greenbar. Continuations of a wrapped line hang 4 columns in. Same deny typing clock as the wide piece (0.35 to ~2s)."""
-    a = Anim()
-    c, ls = cw(MD), 32
-
-    def snap(y: float) -> float:
-        return y + (GREENBAR - y) % ls
-
-    def lines(x: float, y: float, s: str, color: str, width: int, cls: str = "", glw: str = "") -> tuple[str, float]:
-        out = []
-        for j, ln in enumerate(wrap(s, width, hang=4, balance=True)):
-            out.append(text(x + (4 * NCS if j else 0), y, [(color, ln)], NS, cls, extra=glw))
-            y += ls
-        return "".join(out), y
-
-    y = 100
-    body = [text(NM, y, [(t.label, PROMPT), (t.accent, "dir")], MD, extra=glow(t))]
-    y += 44
-    for name, tier, _ in PRODUCTS:
-        body.append(text(NM, y, [(t.display if t.dark else t.text, f"{name:<10}"), (t.label, " <DIR>")], MD, weight=600, extra=glow(t)) + badge(NM + 18 * c, y, tier, t, NS))
-        y += 36
-    y = snap(y + 4)
-    s, y = lines(NM, y, PROMPT + REM_INSTALL, t.label, NCOLS_S)
-    body.append(s)
-    for cmd in INSTALL:
-        s, y = lines(NM + 2 * NCS, y, cmd, t.accent, NCOLS_S - 2, glw=glow(t))
-        body.append(s)
-    y += ls
-    body.append(text(NM, y, [(t.label, PROMPT), (t.accent, "claude")], NS, extra=glow(t)))
-    y += ls
-    body.append(f'<circle cx="{NM + 5}" cy="{y - 6}" r="5" fill="{t.text}"/>' + text(NM + 2 * NCS, y, [(t.text, "Bash"), (t.muted, "(rm -rf /)")], NS))
-    y += ls
-    dx, word = NM + 4 * NCS, "guard"
-    deny = wrap(word + DENY_TAIL + " " + DENY_WHY, NCOLS_S - 4)
-    assert deny[0].startswith(word + " ") and " ".join(deny) == word + DENY_TAIL + " " + DENY_WHY
-    rv = a.flash(0.3, "fill", PH, hot(t))
-    out = [
-        f'<path d="M{NM + 2 * NCS + 3:g} {y - 18}v12h10" fill="none" stroke="{t.muted}" stroke-width="1.6"/>'
-        f'<rect class="{rv}" x="{dx - 4:g}" y="{y - 17}" width="{len(word) * NCS + 8:g}" height="23" fill="{PH}"/>'
-        + text(dx, y, [(PH_INK, word)], NS, weight=700)
-    ]
-    start = 0.35
-    for j, line in enumerate(deny):
-        seg = line[len(word):] if j == 0 else line
-        x = dx + len(word) * NCS if j == 0 else dx
-        out.append(text(x, y + j * ls, [(t.accent, seg)], NS, a.type(start, seg), extra=glow(t)))
-        start += len(seg) / CPS
-    body.append(f'<g class="{a.show(0.3)}">{"".join(out)}</g>')
-    y += len(deny) * ls
-    shown = a.show(T_REM)
-    s, y = lines(NM, y, PROMPT + REM_LOG, t.label, NCOLS_S, shown)
-    body.append(s)
-    body.append(text(NM, y, [(t.label, PROMPT)], NS, shown) + cursor(t, NM + len(PROMPT) * NCS, y, NS, shown))
-    y += 22
-    body.append(hrule(t, y, NM, NC))
-    a1, a2 = TIERS_NOTE.split(" · ")
-    y += 30
-    body.append(text(NM, y, [(t.muted, a1)], NS) + text(NC, y, [(t.muted, "tracine.dev")], NS, extra=' text-anchor="end"'))
-    y += 26
-    body.append(text(NM, y, [(t.muted, a2)], NS))
-    return nframe(t, y + NPAD_B, a, SHOW_LABEL, "DIR", "".join(body))
 
 
 def evals_m(t: Theme) -> str:
@@ -544,31 +462,13 @@ def evals_m(t: Theme) -> str:
     return nframe(t, y - 26 + NPAD_B, a, EVAL_LABEL, "EVALS", "".join(body))
 
 
-def footer_m(t: Theme) -> str:
-    """Stacked: EOF lead by the mark, the site with the cursor, then the other links full width."""
-    a = Anim()
-    x = NM + 54
-    body = (
-        mark(NM, 25, 0.66, t.accent, filt=glow(t, "line"))
-        + text(x, 52, [(t.label, FOOT_LEAD.rstrip(" ·"))], MD, weight=600, extra=glow(t))
-        + text(x, 84, [(t.accent, "anthonyledesma.com")], MD, weight=600, extra=glow(t))
-        + cursor(t, x + 18 * cw(MD) + 8, 84, MD)
-        + text(NM, 120, [(t.muted, FOOT_LINKS)], NS)
-    )
-    return nframe(t, 120 + NPAD_B, a, FOOT_LABEL, "", body, strip=False)
-
-
 PIECES = {
     "header": header,
-    "showcase": showcase,
     "evals": evals,
     "contrib-runner-mono": contrib_runner,
-    "footer": footer,
     "header-m": header_m,
-    "showcase-m": showcase_m,
     "evals-m": evals_m,
     "contrib-runner-mono-m": lambda t: contrib_runner(t, narrow=True),
-    "footer-m": footer_m,
 }
 # The only intentional infinite animation: README images can't detect scrolling, so a replay is how visitors actually see the run.
 LOOPING = {"contrib-runner-mono", "contrib-runner-mono-m"}
