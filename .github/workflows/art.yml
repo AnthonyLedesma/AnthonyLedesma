@@ -41,13 +41,15 @@ jobs:
       - name: Commit to art branch if changed
         working-directory: out
         run: |
-          cp ../art/contrib.json ../art/contrib-runner-mono-dark.svg ../art/contrib-runner-mono-light.svg .
+          cp ../art/contrib.json ../art/contrib-runner-mono-dark.svg ../art/contrib-runner-mono-light.svg \
+            ../art/contrib-runner-mono-m-dark.svg ../art/contrib-runner-mono-m-light.svg .
           if [ -z "$(git status --porcelain)" ]; then
             echo "No art changes."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add contrib.json contrib-runner-mono-dark.svg contrib-runner-mono-light.svg
+          git add contrib.json contrib-runner-mono-dark.svg contrib-runner-mono-light.svg \
+            contrib-runner-mono-m-dark.svg contrib-runner-mono-m-light.svg
           git commit -m "Refresh contribution art"
           git push
